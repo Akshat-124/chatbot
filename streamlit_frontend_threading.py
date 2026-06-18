@@ -12,12 +12,16 @@ def generate_thread_id():
 def reset_chat():
     thread_id = generate_thread_id()
     st.session_state['thread_id'] = thread_id
-    add_thread(st.session_state['thread_id'])
+    add_thread(st.session_state['thread_id'], "New Chat")
     st.session_state['message_history'] = []
 
-def add_thread(thread_id):
+def add_thread(thread_id, title="New Chat"):
     if thread_id not in st.session_state['chat_threads']:
         st.session_state['chat_threads'].append(thread_id)
+    if 'chat_titles' not in st.session_state:
+        st.session_state['chat_titles'] = {}
+    if thread_id not in st.session_state['chat_titles']:
+        st.session_state['chat_titles'][thread_id] = title
 
 def load_conversation(thread_id):
     state = chatbot.get_state(config={'configurable': {'thread_id': thread_id}})
@@ -35,6 +39,9 @@ if 'thread_id' not in st.session_state:
 if 'chat_threads' not in st.session_state:
     st.session_state['chat_threads'] = []
 
+if 'chat_titles' not in st.session_state:
+    st.session_state['chat_titles'] = {}
+
 add_thread(st.session_state['thread_id'])
 
 
@@ -48,7 +55,8 @@ if st.sidebar.button('New Chat'):
 st.sidebar.header('My Conversations')
 
 for thread_id in st.session_state['chat_threads'][::-1]:
-    if st.sidebar.button(str(thread_id)):
+    title = st.session_state['chat_titles'].get(thread_id, "New Chat")
+    if st.sidebar.button(title, key=str(thread_id)):
         st.session_state['thread_id'] = thread_id
         messages = load_conversation(thread_id)
 
@@ -74,6 +82,12 @@ for message in st.session_state['message_history']:
 user_input = st.chat_input('Type here')
 
 if user_input:
+    # Set the chat title based on the first query if it's currently "New Chat"
+    current_thread = st.session_state['thread_id']
+    if st.session_state['chat_titles'].get(current_thread, "New Chat") == "New Chat":
+        # Keep it descriptive but concise (max 25 characters)
+        title = user_input[:25] + "..." if len(user_input) > 25 else user_input
+        st.session_state['chat_titles'][current_thread] = title
 
     # first add the message to message_history
     st.session_state['message_history'].append({'role': 'user', 'content': user_input})
@@ -97,3 +111,4 @@ if user_input:
         ai_message = st.write_stream(ai_only_stream())
 
     st.session_state['message_history'].append({'role': 'assistant', 'content': ai_message})
+    st.rerun()
