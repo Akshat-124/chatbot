@@ -107,7 +107,7 @@ if user_input:
         "metadata": {
             "thread_id": st.session_state["thread_id"]
         },
-        "run_name": "chat_turn",
+        "run_name": "chat_turn" ,
     }
 
     # first add the message to message_history
