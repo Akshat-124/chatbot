@@ -19,4 +19,4 @@ COPY . .
 EXPOSE 7860
 
 # Run Streamlit on port 7860
-ENTRYPOINT ["streamlit", "run", "streamlit_rag_frontend.py", "--server.port=7860", "--server.address=0.0.0.0"]
+ENTRYPOINT ["streamlit", "run", "streamlit_rag_frontend.py", "--server.port=7860", "--server.address=0.0.0.0", "--server.enableXsrfProtection=false"]

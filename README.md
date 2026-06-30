@@ -1,68 +1,87 @@
-# LangGraph Streamlit Chatbot
+# LangGraph Streamlit RAG Chatbot & Agent
 
-A modern, conversational LLM chatbot application built with [LangGraph](https://github.com/langchain-ai/langgraph) and [Streamlit](https://streamlit.io/). It supports conversational memory, message streaming, multiple concurrent chat threads, and persistent storage via SQLite database checkpointing.
+A modern, containerized, conversational AI agent built with **LangGraph**, **LangChain**, and **Streamlit**. It supports conversational memory, message streaming, multiple concurrent chat threads, persistent SQLite storage, and a dynamic Retrieval-Augmented Generation (RAG) pipeline for PDF document querying.
 
 ---
 
 ## 🚀 Features
 
-- **Conversational Memory**: Powered by LangGraph's state management and checkpointer systems.
-- **Multiple Chat Threads**: Switch between conversations easily from the sidebar.
-- **Dynamic Titles**: Conversation thread titles are automatically generated from the first user sentence.
-- **Message Streaming**: Stream response tokens block-by-block directly from the ChatGroq model.
-- **Database Persistence**: Persists conversations locally using a SQLite database (`chatbot.db`) so chat history is saved between sessions.
+- **📂 Dynamic PDF RAG**: Upload any PDF directly in the sidebar. The application will chunk the document, generate embeddings (`all-MiniLM-L6-v2`), store them in a local **FAISS** vector database, and call a retrieval tool dynamically to answer context-specific questions.
+- **🔧 Agentic Tool Orchestration**: Powered by LangGraph's state machine, the LLM can call external tools on the fly:
+  - `rag_tool`: Query context from the uploaded PDF document.
+  - `DuckDuckGo Search`: Access live web information.
+  - `calculator`: Perform basic math operations (`add`, `sub`, `mul`, `div`).
+  - `get_stock_price`: Look up real-time stock quotes.
+- **💾 Conversational Memory & Persistence**: Uses a SQLite checkpointer database (`chatbot.db`) to preserve state, allowing users to switch between past conversations without losing context.
+- **💬 Streamlit UI with Token Streaming**: High-fidelity user interface featuring real-time assistant responses, sidebar thread navigation, and automatic conversation title generation based on the first user message.
+- **🐳 Docker Ready**: Configured for simple containerized execution and deployment.
 
 ---
 
-## 🛠️ Project Structure
+## 📂 Project Structure
 
-- `langgraph_database_backend.py`: Backend containing the LangGraph compilations and state checkpointers utilizing SQLite for persistent memory.
-- `streamlit_frontend_database.py`: Database-backed user interface featuring persistent chat threads, customized sidebar titles, and optimized message streaming.
-- `streamlit_frontend_threading.py`: Threading-enabled UI that uses in-memory checks for fast testing of multi-chat capabilities.
-- `streamlit_frontend_streaming.py`: Single-session UI showcasing real-time token streaming.
-- `streamlit_frontend.py`: Basic layout showcasing the invocation pattern of the chatbot model.
-- `requirements.txt`: Package dependencies.
-- `.env`: Environment configurations for the model API key.
+- **`streamlit_rag_frontend.py`**: The Streamlit interface featuring thread switching, PDF upload/indexing status, and assistant token streaming.
+- **`langraph_rag_backend.py`**: LangGraph compilation defining state schemas, tool integrations, and SQLite persistence.
+- **`Dockerfile`**: Docker configuration optimized for local container runs or cloud platforms (e.g., Hugging Face Spaces).
+- **`requirements.txt`**: Complete Python package requirements frozen to match the working environment.
+- **`chatbot.db`**: Local SQLite database storing conversation checkpoints.
 
 ---
 
-## 🔧 Installation & Setup
+## 🔧 Local Installation & Setup
 
-1. **Clone the Repository**
-   ```bash
-   git clone https://github.com/Akshat-124/chatbot.git
-   cd chatbot
-   ```
+### 1. Clone the Repository
+```bash
+git clone https://github.com/Akshat-124/chatbot.git
+cd chatbot
+```
 
-2. **Configure Environment Variables**
-   Create a `.env` file in the root directory and add your Groq API key:
-   ```env
-   GROQ_API_KEY="your_groq_api_key_here"
-   ```
+### 2. Configure Environment Variables
+Create a `.env` file in the root directory:
+```env
+GROQ_API_KEY="your_groq_api_key"
+LANGCHAIN_TRACING_V2="true"
+LANGCHAIN_ENDPOINT="https://api.smith.langchain.com"
+LANGCHAIN_API_KEY="your_langchain_api_key"
+LANGCHAIN_PROJECT="Chatbot Project"
+```
 
-3. **Install Dependencies**
-   It is recommended to use a virtual environment:
-   ```bash
-   python -m venv myenv
-   myenv\Scripts\activate  # On Windows
-   # source myenv/bin/activate  # On macOS/Linux
+### 3. Setup Virtual Environment & Install Packages
+```bash
+python -m venv myenv
+myenv\Scripts\activate  # On Windows
+# source myenv/bin/activate  # On macOS/Linux
 
-   pip install -r requirements.txt
-   ```
+pip install -r requirements.txt
+```
 
-4. **Run the Chatbot**
-   To run the database-backed persistent threads version:
-   ```bash
-   streamlit run streamlit_frontend_database.py
-   ```
+### 4. Run the RAG Chatbot Locally
+```bash
+streamlit run streamlit_rag_frontend.py
+```
 
 ---
 
-## 🗺️ Upcoming Features (Roadmap)
+## 🐳 Docker Execution
 
-To elevate this into a fully-featured, production-ready AI companion, the following features are on the roadmap:
+To build and run the application locally inside a Docker container:
+```bash
+# Build the image
+docker build -t langgraph-rag-chatbot .
 
-- **🔍 RAG (Retrieval-Augmented Generation)**: Integrate vector stores (e.g., ChromaDB, FAISS) to load documents (PDFs, text files) and query against local knowledge repositories.
-- **👁️ Image Recognition (Multimodal capabilities)**: Add support for vision-based LLMs to allow image uploads and real-time visual analysis.
-- **🎙️ Speech & Voice Interaction**: Integrations for Text-to-Speech (TTS) and Speech-to-Text (STT) enabling users to converse via voice commands and hear responses spoken back.
-- **🛠️ Advanced Tool Use (Agents)**: Equipping the chatbot with tools to perform web search, run Python scripts, and fetch external API data.
+# Run the container (make sure to pass your .env file variables or use --env-file)
+docker run -p 7860:7860 --env-file .env langgraph-rag-chatbot
+```
+Access the application at `http://localhost:7860`.
+
+---
+
+## ☁️ Deployment (Hugging Face Spaces)
+
+This repository is ready to be deployed on **Hugging Face Spaces** using the **Docker SDK**:
+
+1. Create a **New Space** on Hugging Face.
+2. Select **Docker** as the SDK and choose the **Blank** template.
+3. In the Space **Settings**, add your API keys under **Secrets** (e.g., `GROQ_API_KEY`, `LANGCHAIN_API_KEY`).
+4. Upload `Dockerfile`, `streamlit_rag_frontend.py`, `langraph_rag_backend.py`, and `requirements.txt` directly to the Space Files repository.
+5. Hugging Face will build the Docker container automatically and host your live demo.
