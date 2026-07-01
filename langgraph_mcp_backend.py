@@ -50,11 +50,27 @@ search_tool = DuckDuckGoSearchRun(region="us-en")
 def get_stock_price(symbol: str) -> dict:
     """
     Fetch latest stock price for a given symbol (e.g. 'AAPL', 'TSLA') 
-    using Alpha Vantage with API key in the URL.
+    using Yahoo Finance API (no key required).
     """
-    url = f"https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={symbol}&apikey=C9PE94QUEW9VWGFM"
-    r = requests.get(url)
-    return r.json()
+    try:
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
+        headers = {"User-Agent": "Mozilla/5.0"}
+        r = requests.get(url, headers=headers)
+        data = r.json()
+        
+        meta = data["chart"]["result"][0]["meta"]
+        price = meta["regularMarketPrice"]
+        currency = meta["currency"]
+        
+        return {
+            "symbol": symbol,
+            "price": price,
+            "currency": currency,
+            "message": f"The current price of {symbol} is {price} {currency}."
+        }
+    except Exception as e:
+        return {"error": f"Could not retrieve stock price: {str(e)}"}
+
 
 
 client = MultiServerMCPClient(
