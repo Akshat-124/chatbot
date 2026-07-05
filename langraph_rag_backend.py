@@ -21,7 +21,26 @@ from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode, tools_condition
 import requests
 
+from langchain_core.tools import BaseTool
+from langchain_mcp_adapters.client import MultiServerMCPClient
+import asyncio
+import threading
+
 load_dotenv()
+
+# Dedicated async loop for backend tasks
+_ASYNC_LOOP = asyncio.new_event_loop()
+_ASYNC_THREAD = threading.Thread(target=_ASYNC_LOOP.run_forever, daemon=True)
+_ASYNC_THREAD.start()
+
+
+def _submit_async(coro):
+    return asyncio.run_coroutine_threadsafe(coro, _ASYNC_LOOP)
+
+
+def run_async(coro):
+    return _submit_async(coro).result()
+
 
 # -------------------
 # 1. LLM + embeddings
@@ -205,7 +224,27 @@ def rag_tool(query: str, thread_id: Optional[str] = None) -> dict:
     }
 
 
-tools = [search_tool, get_stock_price, calculator, rag_tool]
+client = MultiServerMCPClient(
+    {
+        "expense": {
+            "transport": "streamable_http",  # if this fails, try "sse"
+            "url": "https://splendid-gold-dingo.fastmcp.app/mcp"
+        }
+    }
+)
+
+
+def load_mcp_tools() -> list[BaseTool]:
+    try:
+        return run_async(client.get_tools())
+    except Exception as e:
+        print(f"Error loading MCP tools: {e}")
+        return []
+
+
+mcp_tools = load_mcp_tools()
+
+tools = [search_tool, get_stock_price, calculator, rag_tool, *mcp_tools]
 llm_with_tools = llm.bind_tools(tools)
 
 # -------------------
@@ -226,9 +265,9 @@ def chat_node(state: ChatState, config=None):
 
     system_message = SystemMessage(
         content=(
-            "You are a helpful assistant. You have access to web search, stock price, and calculator tools. "
-            "If the user asks a question about an uploaded PDF or document, you MUST call the `rag_tool` tool with "
-            "their question and include the exact thread_id "
+            "You are a helpful assistant. You have access to web search, stock price, calculator, and expense "
+            "tracking MCP tools. If the user asks a question about an uploaded PDF or document, you MUST call the "
+            "`rag_tool` tool with their question and include the exact thread_id "
             f"`{thread_id}`. Do not attempt to answer questions about the document without calling `rag_tool`. "
             "If the user asks questions about a document or PDF, but no document has been uploaded yet, politely "
             "instruct them to upload a PDF in the sidebar first. For general queries, answer directly without "
