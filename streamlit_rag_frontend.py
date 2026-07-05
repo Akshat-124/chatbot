@@ -1,3 +1,4 @@
+import queue
 import uuid
 
 import streamlit as st
@@ -8,6 +9,7 @@ from langraph_rag_backend import (
     ingest_pdf,
     retrieve_all_threads,
     thread_document_metadata,
+    submit_async_task,
 )
 
 
@@ -117,11 +119,31 @@ if user_input:
         status_holder = {"box": None}
 
         def ai_only_stream():
-            for message_chunk, _ in chatbot.stream(
-                {"messages": [HumanMessage(content=user_input)]},
-                config=CONFIG,
-                stream_mode="messages",
-            ):
+            event_queue: queue.Queue = queue.Queue()
+
+            async def run_stream():
+                try:
+                    async for message_chunk, metadata in chatbot.astream(
+                        {"messages": [HumanMessage(content=user_input)]},
+                        config=CONFIG,
+                        stream_mode="messages",
+                    ):
+                        event_queue.put((message_chunk, metadata))
+                except Exception as exc:
+                    event_queue.put(("error", exc))
+                finally:
+                    event_queue.put(None)
+
+            submit_async_task(run_stream())
+
+            while True:
+                item = event_queue.get()
+                if item is None:
+                    break
+                message_chunk, metadata = item
+                if message_chunk == "error":
+                    raise metadata
+
                 if isinstance(message_chunk, ToolMessage):
                     tool_name = getattr(message_chunk, "name", "tool")
                     if status_holder["box"] is None:

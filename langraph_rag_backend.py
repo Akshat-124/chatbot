@@ -42,6 +42,11 @@ def run_async(coro):
     return _submit_async(coro).result()
 
 
+def submit_async_task(coro):
+    """Schedule a coroutine on the backend event loop."""
+    return _submit_async(coro)
+
+
 # -------------------
 # 1. LLM + embeddings
 # -------------------
@@ -257,7 +262,7 @@ class ChatState(TypedDict):
 # -------------------
 # 5. Nodes
 # -------------------
-def chat_node(state: ChatState, config=None):
+async def chat_node(state: ChatState, config=None):
     """LLM node that may answer or request a tool call."""
     thread_id = None
     if config and isinstance(config, dict):
@@ -276,7 +281,7 @@ def chat_node(state: ChatState, config=None):
     )
 
     messages = [system_message, *state["messages"]]
-    response = llm_with_tools.invoke(messages, config=config)
+    response = await llm_with_tools.ainvoke(messages, config=config)
     return {"messages": [response]}
 
 
