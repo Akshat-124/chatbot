@@ -290,8 +290,16 @@ tool_node = ToolNode(tools)
 # -------------------
 # 6. Checkpointer
 # -------------------
-conn = sqlite3.connect(database="chatbot.db", check_same_thread=False)
-checkpointer = SqliteSaver(conn=conn)
+import aiosqlite
+from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+
+
+async def _init_checkpointer():
+    conn = await aiosqlite.connect(database="chatbot.db")
+    return AsyncSqliteSaver(conn)
+
+
+checkpointer = run_async(_init_checkpointer())
 
 # -------------------
 # 7. Graph
@@ -309,11 +317,15 @@ chatbot = graph.compile(checkpointer=checkpointer)
 # -------------------
 # 8. Helpers
 # -------------------
-def retrieve_all_threads():
+async def _alist_threads():
     all_threads = set()
-    for checkpoint in checkpointer.list(None):
+    async for checkpoint in checkpointer.alist(None):
         all_threads.add(checkpoint.config["configurable"]["thread_id"])
     return list(all_threads)
+
+
+def retrieve_all_threads():
+    return run_async(_alist_threads())
 
 
 def thread_has_document(thread_id: str) -> bool:
