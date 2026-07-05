@@ -27,7 +27,7 @@ load_dotenv()
 # 1. LLM + embeddings
 # -------------------
 llm = ChatGroq(
-    model="llama-3.3-70b-versatile"
+    model="llama-3.1-8b-instant"
 )
 embedding_model = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
 
@@ -135,14 +135,36 @@ def get_stock_price(symbol: str) -> dict:
     using Yahoo Finance API (no key required).
     """
     try:
+        symbol = symbol.strip().upper()
         url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
         headers = {"User-Agent": "Mozilla/5.0"}
-        r = requests.get(url, headers=headers)
-        data = r.json()
+        r = requests.get(url, headers=headers, timeout=5)
         
-        meta = data["chart"]["result"][0]["meta"]
+        if r.status_code != 200:
+            return {
+                "error": f"Yahoo Finance API returned status code {r.status_code}.",
+                "message": "Yahoo Finance API is rate-limiting or blocking requests from this hosting provider's IP range. Please use the search tool to find the current stock price."
+            }
+            
+        data = r.json()
+        chart_data = data.get("chart", {})
+        if chart_data.get("error") is not None:
+            err_desc = chart_data["error"].get("description", "Unknown error")
+            return {"error": f"Yahoo Finance API error for symbol '{symbol}': {err_desc}"}
+            
+        results = chart_data.get("result")
+        if not results:
+            return {"error": f"No data found for symbol '{symbol}'."}
+            
+        meta = results[0].get("meta", {})
+        if "regularMarketPrice" not in meta:
+            suggestion = ""
+            if symbol == "APPL":
+                suggestion = " Did you mean AAPL?"
+            return {"error": f"Symbol '{symbol}' has no current market price data.{suggestion}"}
+            
         price = meta["regularMarketPrice"]
-        currency = meta["currency"]
+        currency = meta.get("currency", "USD")
         
         return {
             "symbol": symbol,
@@ -151,7 +173,10 @@ def get_stock_price(symbol: str) -> dict:
             "message": f"The current price of {symbol} is {price} {currency}."
         }
     except Exception as e:
-        return {"error": f"Could not retrieve stock price: {str(e)}"}
+        return {
+            "error": f"Could not retrieve stock price: {str(e)}",
+            "message": "Failed to connect to Yahoo Finance. If this persists, please use the web search tool."
+        }
 
 
 
@@ -201,11 +226,13 @@ def chat_node(state: ChatState, config=None):
 
     system_message = SystemMessage(
         content=(
-            "You are a helpful assistant. For questions about the uploaded PDF, call "
-            "the `rag_tool` and include the thread_id "
-            f"`{thread_id}`. You can also use the web search, stock price, and "
-            "calculator tools when helpful. If no document is available, ask the user "
-            "to upload a PDF."
+            "You are a helpful assistant. You have access to web search, stock price, and calculator tools. "
+            "If the user asks a question about an uploaded PDF or document, you MUST call the `rag_tool` tool with "
+            "their question and include the exact thread_id "
+            f"`{thread_id}`. Do not attempt to answer questions about the document without calling `rag_tool`. "
+            "If the user asks questions about a document or PDF, but no document has been uploaded yet, politely "
+            "instruct them to upload a PDF in the sidebar first. For general queries, answer directly without "
+            "mentioning or requesting a PDF upload."
         )
     )
 

@@ -63,14 +63,36 @@ def get_stock_price(symbol: str) -> dict:
     using Yahoo Finance API (no key required).
     """
     try:
+        symbol = symbol.strip().upper()
         url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
         headers = {"User-Agent": "Mozilla/5.0"}
-        r = requests.get(url, headers=headers)
-        data = r.json()
+        r = requests.get(url, headers=headers, timeout=5)
         
-        meta = data["chart"]["result"][0]["meta"]
+        if r.status_code != 200:
+            return {
+                "error": f"Yahoo Finance API returned status code {r.status_code}.",
+                "message": "Yahoo Finance API is rate-limiting or blocking requests from this hosting provider's IP range. Please use the search tool to find the current stock price."
+            }
+            
+        data = r.json()
+        chart_data = data.get("chart", {})
+        if chart_data.get("error") is not None:
+            err_desc = chart_data["error"].get("description", "Unknown error")
+            return {"error": f"Yahoo Finance API error for symbol '{symbol}': {err_desc}"}
+            
+        results = chart_data.get("result")
+        if not results:
+            return {"error": f"No data found for symbol '{symbol}'."}
+            
+        meta = results[0].get("meta", {})
+        if "regularMarketPrice" not in meta:
+            suggestion = ""
+            if symbol == "APPL":
+                suggestion = " Did you mean AAPL?"
+            return {"error": f"Symbol '{symbol}' has no current market price data.{suggestion}"}
+            
         price = meta["regularMarketPrice"]
-        currency = meta["currency"]
+        currency = meta.get("currency", "USD")
         
         return {
             "symbol": symbol,
@@ -79,7 +101,10 @@ def get_stock_price(symbol: str) -> dict:
             "message": f"The current price of {symbol} is {price} {currency}."
         }
     except Exception as e:
-        return {"error": f"Could not retrieve stock price: {str(e)}"}
+        return {
+            "error": f"Could not retrieve stock price: {str(e)}",
+            "message": "Failed to connect to Yahoo Finance. If this persists, please use the web search tool."
+        }
 
 
 
