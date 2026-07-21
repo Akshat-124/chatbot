@@ -35,6 +35,23 @@ def load_conversation(thread_id):
     return state.values.get("messages", [])
 
 
+def get_thread_title(thread_id):
+    if "chat_titles" not in st.session_state:
+        st.session_state["chat_titles"] = {}
+    if thread_id in st.session_state["chat_titles"] and st.session_state["chat_titles"][thread_id] != "New Chat":
+        return st.session_state["chat_titles"][thread_id]
+
+    messages = load_conversation(thread_id)
+    title = "New Chat"
+    for msg in messages:
+        if isinstance(msg, HumanMessage) and msg.content:
+            content = msg.content.strip()
+            title = content[:28] + "…" if len(content) > 28 else content
+            break
+    st.session_state["chat_titles"][thread_id] = title
+    return title
+
+
 # ======================= Session Initialization ===================
 if "message_history" not in st.session_state:
     st.session_state["message_history"] = []
@@ -44,6 +61,9 @@ if "thread_id" not in st.session_state:
 
 if "chat_threads" not in st.session_state:
     st.session_state["chat_threads"] = retrieve_all_threads()
+
+if "chat_titles" not in st.session_state:
+    st.session_state["chat_titles"] = {}
 
 if "ingested_docs" not in st.session_state:
     st.session_state["ingested_docs"] = {}
@@ -56,10 +76,9 @@ threads = st.session_state["chat_threads"][::-1]
 selected_thread = None
 
 # ============================ Sidebar ============================
-st.sidebar.title("LangGraph PDF Chatbot")
-st.sidebar.markdown(f"**Thread ID:** `{thread_key}`")
+st.sidebar.title("LangGraph Chatbot")
 
-if st.sidebar.button("New Chat", use_container_width=True):
+if st.sidebar.button("➕ New Chat", use_container_width=True):
     reset_chat()
     st.rerun()
 
@@ -70,7 +89,7 @@ if thread_docs:
         f"({latest_doc.get('chunks')} chunks from {latest_doc.get('documents')} pages)"
     )
 else:
-    st.sidebar.info("No PDF indexed yet.")
+    st.sidebar.info("No PDF indexed for current chat.")
 
 uploaded_pdf = st.sidebar.file_uploader("Upload a PDF for this chat", type=["pdf"])
 if uploaded_pdf:
@@ -86,12 +105,21 @@ if uploaded_pdf:
             thread_docs[uploaded_pdf.name] = summary
             status_box.update(label="✅ PDF indexed", state="complete", expanded=False)
 
-st.sidebar.subheader("Past conversations")
+st.sidebar.divider()
+st.sidebar.subheader("Recent Conversations")
 if not threads:
     st.sidebar.write("No past conversations yet.")
 else:
     for thread_id in threads:
-        if st.sidebar.button(str(thread_id), key=f"side-thread-{thread_id}"):
+        title = get_thread_title(thread_id)
+        is_current = (thread_id == st.session_state["thread_id"])
+        btn_label = f"💬 {title}" if not is_current else f"🔹 {title}"
+        if st.sidebar.button(
+            btn_label,
+            key=f"side-thread-{thread_id}",
+            use_container_width=True,
+            type="primary" if is_current else "secondary",
+        ):
             selected_thread = thread_id
 
 # ============================ Main Layout ========================
@@ -105,6 +133,12 @@ for message in st.session_state["message_history"]:
 user_input = st.chat_input("Ask about your document or use tools")
 
 if user_input:
+    # Update title dynamically if it's currently "New Chat"
+    curr_tid = st.session_state["thread_id"]
+    if get_thread_title(curr_tid) == "New Chat":
+        clean_input = user_input.strip()
+        new_title = clean_input[:28] + "…" if len(clean_input) > 28 else clean_input
+        st.session_state["chat_titles"][curr_tid] = new_title
     st.session_state["message_history"].append({"role": "user", "content": user_input})
     with st.chat_message("user"):
         st.text(user_input)
