@@ -166,6 +166,35 @@ ingest_pdf = ingest_document
 # -------------------
 search_tool = DuckDuckGoSearchRun(region="us-en")
 
+try:
+    from exa_py import Exa
+    _exa_key = os.getenv("EXA_API_KEY")
+    exa_client = Exa(api_key=_exa_key) if _exa_key else None
+except Exception:
+    exa_client = None
+
+
+@tool
+def exa_search_tool(query: str) -> str:
+    """
+    Perform a neural web search using Exa AI search engine.
+    Use this for searching real-time web information, latest news, recent events, articles, and research.
+    """
+    if not exa_client:
+        return "Exa API key is not configured."
+    try:
+        res = exa_client.search(query, num_results=5)
+        results = []
+        for r in res.results:
+            title = getattr(r, 'title', 'No Title')
+            url = getattr(r, 'url', '')
+            text = getattr(r, 'text', '')
+            results.append(f"Title: {title}\nURL: {url}\nContent: {text[:1000] if text else 'N/A'}")
+        return "\n---\n".join(results) if results else "No relevant search results found."
+    except Exception as e:
+        return f"Exa search error: {str(e)}"
+
+
 
 @tool
 def calculator(first_num: float, second_num: float, operation: str) -> dict:
@@ -294,7 +323,7 @@ def load_mcp_tools() -> list[BaseTool]:
 
 mcp_tools = load_mcp_tools()
 
-tools = [search_tool, get_stock_price, calculator, rag_tool, *mcp_tools]
+tools = [exa_search_tool, search_tool, get_stock_price, calculator, rag_tool, *mcp_tools]
 llm_with_tools = llm.bind_tools(tools)
 
 # -------------------
@@ -315,13 +344,16 @@ async def chat_node(state: ChatState, config=None):
 
     system_message = SystemMessage(
         content=(
-            "You are a helpful assistant. You have access to web search, stock price, calculator, and expense "
-            "tracking MCP tools. If the user asks a question about an uploaded document, PDF, or PowerPoint presentation, "
+            "You are a helpful assistant. You have access to real-time web search (`exa_search_tool`), stock price, "
+            "calculator, and expense tracking MCP tools. "
+            "IMPORTANT FOR SEARCH: For any questions asking for real-time web information, recent news, current events, "
+            "facts, or internet research, you MUST call the `exa_search_tool` tool to retrieve up-to-date information. "
+            "If the user asks a question about an uploaded document, PDF, or PowerPoint presentation, "
             "you MUST call the `rag_tool` tool with their question and include the exact thread_id "
             f"`{thread_id}`. Do not attempt to answer questions about the document without calling `rag_tool`. "
             "If the user asks questions about a document, PDF, or presentation, but no document has been uploaded yet, politely "
-            "instruct them to upload a PDF or PPTX file in the sidebar first. For general queries, answer directly without "
-            "mentioning or requesting a document upload."
+            "instruct them to upload a PDF or PPTX file in the sidebar first. For general queries that require real-time search, "
+            "always prefer calling `exa_search_tool`."
         )
     )
 
