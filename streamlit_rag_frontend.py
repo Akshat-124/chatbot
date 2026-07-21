@@ -86,24 +86,24 @@ if thread_docs:
     latest_doc = list(thread_docs.values())[-1]
     st.sidebar.success(
         f"Using `{latest_doc.get('filename')}` "
-        f"({latest_doc.get('chunks')} chunks from {latest_doc.get('documents')} pages)"
+        f"({latest_doc.get('chunks')} chunks from {latest_doc.get('documents')} pages/slides)"
     )
 else:
-    st.sidebar.info("No PDF indexed for current chat.")
+    st.sidebar.info("No document indexed for current chat.")
 
-uploaded_pdf = st.sidebar.file_uploader("Upload a PDF for this chat", type=["pdf"])
-if uploaded_pdf:
-    if uploaded_pdf.name in thread_docs:
-        st.sidebar.info(f"`{uploaded_pdf.name}` already processed for this chat.")
+uploaded_doc = st.sidebar.file_uploader("Upload a PDF or PPTX for this chat", type=["pdf", "pptx", "ppt"])
+if uploaded_doc:
+    if uploaded_doc.name in thread_docs:
+        st.sidebar.info(f"`{uploaded_doc.name}` already processed for this chat.")
     else:
-        with st.sidebar.status("Indexing PDF…", expanded=True) as status_box:
+        with st.sidebar.status("Indexing Document…", expanded=True) as status_box:
             summary = ingest_pdf(
-                uploaded_pdf.getvalue(),
+                uploaded_doc.getvalue(),
                 thread_id=thread_key,
-                filename=uploaded_pdf.name,
+                filename=uploaded_doc.name,
             )
-            thread_docs[uploaded_pdf.name] = summary
-            status_box.update(label="✅ PDF indexed", state="complete", expanded=False)
+            thread_docs[uploaded_doc.name] = summary
+            status_box.update(label="✅ Document indexed", state="complete", expanded=False)
 
 st.sidebar.divider()
 st.sidebar.subheader("Recent Conversations")

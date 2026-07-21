@@ -69,22 +69,65 @@ def _get_retriever(thread_id: Optional[str]):
     return None
 
 
-def ingest_pdf(file_bytes: bytes, thread_id: str, filename: Optional[str] = None) -> dict:
+from langchain_core.documents import Document
+import pptx
+
+
+def _load_pptx(file_path: str) -> list[Document]:
+    """Parse slides, shape text, tables, and notes from a PPTX file into LangChain Documents."""
+    prs = pptx.Presentation(file_path)
+    docs = []
+    for i, slide in enumerate(prs.slides, start=1):
+        text_parts = []
+        for shape in slide.shapes:
+            if shape.has_text_frame:
+                text = shape.text_frame.text.strip()
+                if text:
+                    text_parts.append(text)
+            elif shape.has_table:
+                table = shape.table
+                for row in table.rows:
+                    row_text = " | ".join(cell.text.strip() for cell in row.cells if cell.text.strip())
+                    if row_text:
+                        text_parts.append(row_text)
+        if slide.has_notes_slide and slide.notes_slide.notes_text_frame:
+            notes = slide.notes_slide.notes_text_frame.text.strip()
+            if notes:
+                text_parts.append(f"Speaker Notes: {notes}")
+
+        slide_text = "\n".join(text_parts).strip()
+        if slide_text:
+            docs.append(Document(page_content=slide_text, metadata={"page": i, "source": os.path.basename(file_path)}))
+    return docs
+
+
+def ingest_document(file_bytes: bytes, thread_id: str, filename: Optional[str] = None) -> dict:
     """
-    Build a FAISS retriever for the uploaded PDF and store it for the thread.
+    Build a FAISS retriever for the uploaded PDF or PPTX document and store it for the thread.
 
     Returns a summary dict that can be surfaced in the UI.
     """
     if not file_bytes:
         raise ValueError("No bytes received for ingestion.")
 
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
+    fname = filename or "document.pdf"
+    ext = os.path.splitext(fname)[1].lower()
+    if not ext:
+        ext = ".pdf"
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as temp_file:
         temp_file.write(file_bytes)
         temp_path = temp_file.name
 
     try:
-        loader = PyPDFLoader(temp_path)
-        docs = loader.load()
+        if ext in [".pptx", ".ppt"]:
+            docs = _load_pptx(temp_path)
+        else:
+            loader = PyPDFLoader(temp_path)
+            docs = loader.load()
+
+        if not docs:
+            raise ValueError("No readable text content found in document.")
 
         splitter = RecursiveCharacterTextSplitter(
             chunk_size=1000, chunk_overlap=200, separators=["\n\n", "\n", " ", ""]
@@ -98,22 +141,24 @@ def ingest_pdf(file_bytes: bytes, thread_id: str, filename: Optional[str] = None
 
         _THREAD_RETRIEVERS[str(thread_id)] = retriever
         _THREAD_METADATA[str(thread_id)] = {
-            "filename": filename or os.path.basename(temp_path),
+            "filename": fname,
             "documents": len(docs),
             "chunks": len(chunks),
         }
 
         return {
-            "filename": filename or os.path.basename(temp_path),
+            "filename": fname,
             "documents": len(docs),
             "chunks": len(chunks),
         }
     finally:
-        # The FAISS store keeps copies of the text, so the temp file is safe to remove.
         try:
             os.remove(temp_path)
         except OSError:
             pass
+
+
+ingest_pdf = ingest_document
 
 
 # -------------------
@@ -207,13 +252,13 @@ def get_stock_price(symbol: str) -> dict:
 @tool
 def rag_tool(query: str, thread_id: Optional[str] = None) -> dict:
     """
-    Retrieve relevant information from the uploaded PDF for this chat thread.
+    Retrieve relevant information from the uploaded PDF or PowerPoint document for this chat thread.
     Always include the thread_id when calling this tool.
     """
     retriever = _get_retriever(thread_id)
     if retriever is None:
         return {
-            "error": "No document indexed for this chat. Upload a PDF first.",
+            "error": "No document indexed for this chat. Upload a PDF or PowerPoint file first.",
             "query": query,
         }
 
@@ -271,12 +316,12 @@ async def chat_node(state: ChatState, config=None):
     system_message = SystemMessage(
         content=(
             "You are a helpful assistant. You have access to web search, stock price, calculator, and expense "
-            "tracking MCP tools. If the user asks a question about an uploaded PDF or document, you MUST call the "
-            "`rag_tool` tool with their question and include the exact thread_id "
+            "tracking MCP tools. If the user asks a question about an uploaded document, PDF, or PowerPoint presentation, "
+            "you MUST call the `rag_tool` tool with their question and include the exact thread_id "
             f"`{thread_id}`. Do not attempt to answer questions about the document without calling `rag_tool`. "
-            "If the user asks questions about a document or PDF, but no document has been uploaded yet, politely "
-            "instruct them to upload a PDF in the sidebar first. For general queries, answer directly without "
-            "mentioning or requesting a PDF upload."
+            "If the user asks questions about a document, PDF, or presentation, but no document has been uploaded yet, politely "
+            "instruct them to upload a PDF or PPTX file in the sidebar first. For general queries, answer directly without "
+            "mentioning or requesting a document upload."
         )
     )
 
