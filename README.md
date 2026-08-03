@@ -1,3 +1,13 @@
+---
+title: Multi Utility Agentic Chatbot
+emoji: 🤖
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # LangGraph Agentic AI Chatbot & RAG Platform
 
 A full-stack, autonomous, agentic AI platform built with **LangGraph**, **FastAPI**, **LangChain**, and **Vanilla JS/CSS**. 
