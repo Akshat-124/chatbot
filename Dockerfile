@@ -18,5 +18,5 @@ COPY . .
 # Hugging Face Spaces exposes port 7860 by default
 EXPOSE 7860
 
-# Run Streamlit on port 7860
-ENTRYPOINT ["streamlit", "run", "streamlit_rag_frontend.py", "--server.port=7860", "--server.address=0.0.0.0", "--server.enableXsrfProtection=false"]
+# Run FastAPI server on port 7860 for Hugging Face Spaces
+CMD ["uvicorn", "fastapi_server:app", "--host", "0.0.0.0", "--port", "7860"]
