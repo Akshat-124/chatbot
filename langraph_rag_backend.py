@@ -43,8 +43,12 @@ def _submit_async(coro):
     return asyncio.run_coroutine_threadsafe(coro, _ASYNC_LOOP)
 
 
-def run_async(coro):
-    return _submit_async(coro).result()
+def run_async(coro, timeout=5):
+    try:
+        return _submit_async(coro).result(timeout=timeout)
+    except Exception as e:
+        print(f"Async execution timed out or failed: {e}")
+        return None
 
 
 def submit_async_task(coro):
@@ -416,7 +420,8 @@ client = MultiServerMCPClient(
 
 def load_mcp_tools() -> list[BaseTool]:
     try:
-        return run_async(client.get_tools())
+        tools = run_async(client.get_tools(), timeout=5)
+        return tools if tools is not None else []
     except Exception as e:
         print(f"Error loading MCP tools: {e}")
         return []
