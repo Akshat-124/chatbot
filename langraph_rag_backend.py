@@ -60,7 +60,8 @@ def submit_async_task(coro):
 # 1. LLM + embeddings
 # -------------------
 llm = ChatGroq(
-    model="qwen/qwen3.6-27b"
+    model="qwen/qwen3.6-27b",
+    max_retries=3
 )
 embedding_model = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
 
@@ -394,9 +395,9 @@ def scrape_url_tool(url: str) -> dict:
         parser.feed(r.text)
         text = parser.get_text()
         
-        # Limit text content to 8000 characters to prevent context window overflow
-        truncated = text[:8000]
-        if len(text) > 8000:
+        # Limit text content to 3000 characters to prevent TPM token spikes
+        truncated = text[:3000]
+        if len(text) > 3000:
             truncated += "\n\n[Content truncated due to length...]"
             
         return {
