@@ -473,10 +473,31 @@ async def chat_node(state: ChatState, config=None):
     history_limit = 10
     recent_messages = raw_messages[-history_limit:] if len(raw_messages) > history_limit else list(raw_messages)
     
+    import json
     from copy import copy
     for i, msg in enumerate(recent_messages):
         msg_copy = copy(msg)
         
+        # Ensure ToolMessage content is ALWAYS a valid string for API compliance
+        if isinstance(msg_copy, ToolMessage):
+            if not isinstance(msg_copy.content, str):
+                try:
+                    msg_copy.content = json.dumps(msg_copy.content)
+                except Exception:
+                    msg_copy.content = str(msg_copy.content)
+            if not msg_copy.content:
+                msg_copy.content = "{}"
+
+        # Ensure AIMessage content is ALWAYS a valid string
+        elif isinstance(msg_copy, AIMessage):
+            if not isinstance(msg_copy.content, str):
+                try:
+                    msg_copy.content = json.dumps(msg_copy.content)
+                except Exception:
+                    msg_copy.content = str(msg_copy.content)
+            if msg_copy.content is None:
+                msg_copy.content = ""
+
         # Truncate large tool outputs and AI texts in older turns (older than the last 3 messages)
         # to save thousands of tokens while preserving conversational flow
         is_older = i < (len(recent_messages) - 3)
