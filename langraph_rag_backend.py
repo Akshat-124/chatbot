@@ -60,7 +60,7 @@ def submit_async_task(coro):
 # 1. LLM + embeddings
 # -------------------
 llm = ChatGroq(
-    model="qwen/qwen3.6-27b",
+    model="qwen/qwen3.8-27b",
     max_retries=3
 )
 embedding_model = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
